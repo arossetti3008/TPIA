@@ -32,6 +32,14 @@ const usuarioSchema = new mongoose.Schema(
       enum: ['basico', 'intermedio', 'exigente'],
       default: 'intermedio',
     },
+    // 'admin' habilita crear nodos nuevos desde la interfaz. Nunca se puede
+    // setear via /auth/registro: se activa a mano en la base, una sola vez,
+    // para evitar que cualquiera se auto-otorgue privilegios.
+    rol: {
+      type: String,
+      enum: ['estudiante', 'admin'],
+      default: 'estudiante',
+    },
     progreso: [progresoSchema],
   },
   { timestamps: true }

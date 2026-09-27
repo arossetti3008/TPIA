@@ -28,4 +28,14 @@ async function protegerRuta(req, res, next) {
   }
 }
 
-module.exports = { protegerRuta };
+// Se usa DESPUES de protegerRuta. Exige que el usuario autenticado tenga
+// rol 'admin'. El rol nunca se puede setear via /auth/registro, asi que
+// llegar hasta aca solo es posible si alguien lo activo a mano en la base.
+function soloAdmin(req, res, next) {
+  if (!req.usuario || req.usuario.rol !== 'admin') {
+    return res.status(403).json({ mensaje: 'Esta accion requiere rol de administrador' });
+  }
+  next();
+}
+
+module.exports = { protegerRuta, soloAdmin };

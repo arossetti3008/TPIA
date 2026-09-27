@@ -19,14 +19,16 @@ async function registrar(req, res, next) {
       return res.status(409).json({ mensaje: 'Ya existe una cuenta con ese email' });
     }
 
-    // passwordHash se hashea solo, en el pre-save del modelo
+    // passwordHash se hashea solo, en el pre-save del modelo.
+    // El rol SIEMPRE queda en el default 'estudiante' aca: no se acepta
+    // desde el body, para que nadie pueda auto-otorgarse admin.
     const usuario = await Usuario.create({ nombre, email, passwordHash: password });
 
     const accessToken = generarAccessToken(usuario._id);
     const refreshToken = generarRefreshToken(usuario._id);
 
     res.status(201).json({
-      usuario: { id: usuario._id, nombre: usuario.nombre, email: usuario.email },
+      usuario: { id: usuario._id, nombre: usuario.nombre, email: usuario.email, rol: usuario.rol },
       accessToken,
       refreshToken,
     });
@@ -56,7 +58,7 @@ async function iniciarSesion(req, res, next) {
     const refreshToken = generarRefreshToken(usuario._id);
 
     res.json({
-      usuario: { id: usuario._id, nombre: usuario.nombre, email: usuario.email },
+      usuario: { id: usuario._id, nombre: usuario.nombre, email: usuario.email, rol: usuario.rol },
       accessToken,
       refreshToken,
     });
