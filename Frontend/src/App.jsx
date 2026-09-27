@@ -7,6 +7,7 @@ import Registro from './pages/Registro';
 import Arbol from './pages/Arbol';
 import NodoActivo from './pages/NodoActivo';
 import Perfil from './pages/Perfil';
+import AdminNodos from './pages/AdminNodos';
 
 export default function App() {
   return (
@@ -37,6 +38,14 @@ export default function App() {
               element={
                 <RutaProtegida>
                   <Perfil />
+                </RutaProtegida>
+              }
+            />
+            <Route
+              path="/admin/nodos"
+              element={
+                <RutaProtegida>
+                  <AdminNodos />
                 </RutaProtegida>
               }
             />

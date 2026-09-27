@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { api } from '../api/client';
@@ -13,6 +14,7 @@ const ETIQUETA_NIVEL = {
 export default function Perfil() {
   const { usuario, logout } = useAuth();
   const { tema, alternarTema } = useTheme();
+  const navigate = useNavigate();
   const [nodos, setNodos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [avisoEdicion, setAvisoEdicion] = useState(false);
@@ -58,20 +60,46 @@ export default function Perfil() {
           </div>
         </div>
 
-        <span
-          style={{
-            display: 'inline-block',
-            background: 'var(--acento-suave)',
-            color: 'var(--acento)',
-            fontSize: 12,
-            fontWeight: 700,
-            padding: '4px 12px',
-            borderRadius: 20,
-            marginBottom: 16,
-          }}
-        >
-          ⏱ {ETIQUETA_NIVEL[usuario?.nivelDificultad] || 'Nivel Intermedio'}
-        </span>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          <span
+            style={{
+              display: 'inline-block',
+              background: 'var(--acento-suave)',
+              color: 'var(--acento)',
+              fontSize: 12,
+              fontWeight: 700,
+              padding: '4px 12px',
+              borderRadius: 20,
+            }}
+          >
+            ⏱ {ETIQUETA_NIVEL[usuario?.nivelDificultad] || 'Nivel Intermedio'}
+          </span>
+          {usuario?.rol === 'admin' && (
+            <span
+              style={{
+                display: 'inline-block',
+                background: 'var(--azul)',
+                color: '#fff',
+                fontSize: 12,
+                fontWeight: 700,
+                padding: '4px 12px',
+                borderRadius: 20,
+              }}
+            >
+              🛠 Admin
+            </span>
+          )}
+        </div>
+
+        {usuario?.rol === 'admin' && (
+          <button
+            className="boton-primario"
+            style={{ width: '100%', marginBottom: 16 }}
+            onClick={() => navigate('/admin/nodos')}
+          >
+            Panel de administración — crear nodos
+          </button>
+        )}
 
         <button
           className="boton-secundario"

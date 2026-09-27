@@ -1,7 +1,8 @@
 const mongoose = require('mongoose');
 const Nodo = require('../models/Nodo');
 const Usuario = require('../models/Usuario');
-const { calcularArbolConEstados, calcularEstadoNodo } = require('../utils/calcularProgreso');
+const { calcularArbolConEstados } = require('../utils/calcularProgreso');
+const { marcarNodoComoDominado } = require('../services/progresoService');
 
 // GET /api/nodos
 // Devuelve el catalogo completo de nodos, con el estado (bloqueado /
@@ -18,10 +19,7 @@ async function listarNodos(req, res, next) {
 
 // PATCH /api/nodos/:id/dominar
 // Marca un nodo como dominado para el usuario autenticado, siempre y
-// cuando sus prerequisitos ya esten cumplidos. Esta es la version manual
-// (boton "Marcar como dominado" del wireframe); en la Fase 3 el agente
-// tutor va a llamar a esta misma logica automaticamente tras evaluar al
-// estudiante.
+// cuando sus prerequisitos ya esten cumplidos.
 async function marcarDominado(req, res, next) {
   try {
     const { id } = req.params;
@@ -30,33 +28,8 @@ async function marcarDominado(req, res, next) {
       return res.status(400).json({ mensaje: 'Id de nodo invalido' });
     }
 
-    const nodo = await Nodo.findById(id).lean();
-    if (!nodo) {
-      return res.status(404).json({ mensaje: 'Nodo no encontrado' });
-    }
-
     const usuario = await Usuario.findById(req.usuario._id);
-    const estadoActual = calcularEstadoNodo(nodo, usuario.progreso);
-
-    if (estadoActual === 'bloqueado') {
-      return res.status(403).json({
-        mensaje: 'Este nodo esta bloqueado, primero tenes que dominar sus prerequisitos',
-      });
-    }
-
-    const entradaExistente = usuario.progreso.find((p) => p.nodo.toString() === id);
-
-    if (entradaExistente) {
-      entradaExistente.estado = 'dominado';
-      entradaExistente.fechaDominado = new Date();
-    } else {
-      usuario.progreso.push({ nodo: id, estado: 'dominado', fechaDominado: new Date() });
-    }
-
-    await usuario.save();
-
-    const nodosActualizados = await Nodo.find().lean();
-    const arbol = calcularArbolConEstados(nodosActualizados, usuario.progreso);
+    const { nodo, arbol } = await marcarNodoComoDominado(usuario, id);
 
     res.json({ mensaje: `Nodo "${nodo.concepto}" marcado como dominado`, nodos: arbol });
   } catch (error) {
@@ -64,4 +37,45 @@ async function marcarDominado(req, res, next) {
   }
 }
 
-module.exports = { listarNodos, marcarDominado };
+// POST /api/nodos
+// SOLO ADMIN (ver middleware soloAdmin en las rutas). Crea un concepto
+// nuevo en el arbol. En cuanto existe, el tutor de Gemini funciona sobre
+// el automaticamente: no hace falta tocar nada mas del codigo, porque
+// GeminiService arma el prompt a partir de nodo.concepto y nodo.descripcion
+// en tiempo real, sin nada hardcodeado por nodo.
+async function crearNodo(req, res, next) {
+  try {
+    const { concepto, slug, descripcion, prerequisitos } = req.body;
+
+    if (!concepto || !slug || !descripcion) {
+      return res.status(400).json({ mensaje: 'concepto, slug y descripcion son obligatorios' });
+    }
+
+    const slugNormalizado = slug.trim().toLowerCase().replace(/\s+/g, '-');
+
+    const yaExiste = await Nodo.findOne({ slug: slugNormalizado });
+    if (yaExiste) {
+      return res.status(409).json({ mensaje: `Ya existe un nodo con el slug "${slugNormalizado}"` });
+    }
+
+    let prerequisitosValidos = [];
+    if (Array.isArray(prerequisitos) && prerequisitos.length > 0) {
+      const idsValidos = prerequisitos.filter((id) => mongoose.Types.ObjectId.isValid(id));
+      const encontrados = await Nodo.find({ _id: { $in: idsValidos } }).select('_id');
+      prerequisitosValidos = encontrados.map((n) => n._id);
+    }
+
+    const nodo = await Nodo.create({
+      concepto: concepto.trim(),
+      slug: slugNormalizado,
+      descripcion: descripcion.trim(),
+      prerequisitos: prerequisitosValidos,
+    });
+
+    res.status(201).json({ mensaje: `Nodo "${nodo.concepto}" creado correctamente`, nodo });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { listarNodos, marcarDominado, crearNodo };
