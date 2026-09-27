@@ -116,8 +116,11 @@ export const api = {
   listarNodos: () => apiFetch('/nodos'),
 
   marcarDominado: (nodoId) => apiFetch(`/nodos/${nodoId}/dominar`, { method: 'PATCH' }),
+  
+  crearNodo: (payload) => apiFetch('/nodos', { method: 'POST', body: payload }),
 
   obtenerConversacion: (nodoId) => apiFetch(`/tutor/${nodoId}/conversacion`),
+
 
   enviarMensajeTutor: (nodoId, mensaje) =>
     apiFetch(`/tutor/${nodoId}/mensaje`, { method: 'POST', body: { mensaje } }),
