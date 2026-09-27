@@ -1,9 +1,14 @@
 // Todas las llamadas al backend pasan por aca. Se encarga de:
 // - agregar el token de autenticacion a cada request
 // - renovarlo solo con el refreshToken si el accessToken vencio
+// - traducir errores de red/CORS a un mensaje legible (en vez del "Failed to
+//   fetch" generico que tira el navegador)
 // - devolver errores en un formato consistente para el resto de la app
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+const MENSAJE_ERROR_RED =
+  'No se pudo conectar con el servidor. Revisá tu conexión a internet e intentá de nuevo en unos segundos.';
 
 function obtenerTokens() {
   return {
@@ -20,6 +25,17 @@ function guardarTokens({ accessToken, refreshToken }) {
 function limpiarTokens() {
   localStorage.removeItem('nodos_accessToken');
   localStorage.removeItem('nodos_refreshToken');
+}
+
+function errorDeRed(causaOriginal) {
+  // fetch() lanza un TypeError generico ("Failed to fetch") cuando el
+  // problema es de red o CORS, antes de llegar a tener una respuesta real
+  // del servidor. Lo logueamos completo para debug, pero al usuario le
+  // mostramos un mensaje que pueda entender y accionar.
+  console.error('Fallo de red al llamar a la API:', causaOriginal);
+  const error = new Error(MENSAJE_ERROR_RED);
+  error.statusCode = 0;
+  return error;
 }
 
 async function intentarRefrescar() {
@@ -55,13 +71,23 @@ async function apiFetch(path, { method = 'GET', body, autenticado = true } = {})
   };
 
   const { accessToken } = obtenerTokens();
-  let respuesta = await hacerRequest(accessToken);
+  let respuesta;
+
+  try {
+    respuesta = await hacerRequest(accessToken);
+  } catch (fallaDeRed) {
+    throw errorDeRed(fallaDeRed);
+  }
 
   // Si el token vencio (401) y la ruta requiere auth, intentamos refrescar UNA vez
   if (respuesta.status === 401 && autenticado) {
     const nuevoToken = await intentarRefrescar();
     if (nuevoToken) {
-      respuesta = await hacerRequest(nuevoToken);
+      try {
+        respuesta = await hacerRequest(nuevoToken);
+      } catch (fallaDeRed) {
+        throw errorDeRed(fallaDeRed);
+      }
     } else {
       limpiarTokens();
     }
