@@ -5,8 +5,6 @@ const { calcularArbolConEstados } = require('../utils/calcularProgreso');
 const { marcarNodoComoDominado } = require('../services/progresoService');
 
 // GET /api/nodos
-// Devuelve el catalogo completo de nodos, con el estado (bloqueado /
-// en_progreso / dominado) calculado para el usuario autenticado.
 async function listarNodos(req, res, next) {
   try {
     const nodos = await Nodo.find().lean();
@@ -18,8 +16,6 @@ async function listarNodos(req, res, next) {
 }
 
 // PATCH /api/nodos/:id/dominar
-// Marca un nodo como dominado para el usuario autenticado, siempre y
-// cuando sus prerequisitos ya esten cumplidos.
 async function marcarDominado(req, res, next) {
   try {
     const { id } = req.params;
@@ -37,12 +33,20 @@ async function marcarDominado(req, res, next) {
   }
 }
 
+async function validarYNormalizarPrerequisitos(prerequisitos, idAExcluir) {
+  if (!Array.isArray(prerequisitos) || prerequisitos.length === 0) return [];
+
+  const idsValidos = prerequisitos.filter(
+    (id) => mongoose.Types.ObjectId.isValid(id) && id !== String(idAExcluir)
+  );
+  const encontrados = await Nodo.find({ _id: { $in: idsValidos } }).select('_id');
+  return encontrados.map((n) => n._id);
+}
+
 // POST /api/nodos
-// SOLO ADMIN (ver middleware soloAdmin en las rutas). Crea un concepto
-// nuevo en el arbol. En cuanto existe, el tutor de Gemini funciona sobre
-// el automaticamente: no hace falta tocar nada mas del codigo, porque
-// GeminiService arma el prompt a partir de nodo.concepto y nodo.descripcion
-// en tiempo real, sin nada hardcodeado por nodo.
+// SOLO ADMIN. Crea un concepto nuevo. El tutor de Gemini funciona sobre el
+// automaticamente en cuanto existe: arma el prompt en tiempo real a partir
+// de nodo.concepto y nodo.descripcion, nada queda hardcodeado por nodo.
 async function crearNodo(req, res, next) {
   try {
     const { concepto, slug, descripcion, prerequisitos } = req.body;
@@ -58,12 +62,7 @@ async function crearNodo(req, res, next) {
       return res.status(409).json({ mensaje: `Ya existe un nodo con el slug "${slugNormalizado}"` });
     }
 
-    let prerequisitosValidos = [];
-    if (Array.isArray(prerequisitos) && prerequisitos.length > 0) {
-      const idsValidos = prerequisitos.filter((id) => mongoose.Types.ObjectId.isValid(id));
-      const encontrados = await Nodo.find({ _id: { $in: idsValidos } }).select('_id');
-      prerequisitosValidos = encontrados.map((n) => n._id);
-    }
+    const prerequisitosValidos = await validarYNormalizarPrerequisitos(prerequisitos, null);
 
     const nodo = await Nodo.create({
       concepto: concepto.trim(),
@@ -78,4 +77,50 @@ async function crearNodo(req, res, next) {
   }
 }
 
-module.exports = { listarNodos, marcarDominado, crearNodo };
+// PATCH /api/nodos/:id
+// SOLO ADMIN. Edita un nodo existente: concepto, descripcion y prerequisitos.
+// El slug NO se puede editar aca a proposito: el frontend (SkillTree,
+// contenido educativo por concepto) usa el slug como clave fija, y
+// cambiarlo silenciosamente rompería esas referencias.
+async function editarNodo(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ mensaje: 'Id de nodo invalido' });
+    }
+
+    const nodo = await Nodo.findById(id);
+    if (!nodo) {
+      return res.status(404).json({ mensaje: 'Nodo no encontrado' });
+    }
+
+    const { concepto, descripcion, prerequisitos } = req.body;
+
+    if (concepto !== undefined) {
+      if (!concepto.trim()) {
+        return res.status(400).json({ mensaje: 'El concepto no puede quedar vacio' });
+      }
+      nodo.concepto = concepto.trim();
+    }
+
+    if (descripcion !== undefined) {
+      if (!descripcion.trim()) {
+        return res.status(400).json({ mensaje: 'La descripcion no puede quedar vacia' });
+      }
+      nodo.descripcion = descripcion.trim();
+    }
+
+    if (prerequisitos !== undefined) {
+      nodo.prerequisitos = await validarYNormalizarPrerequisitos(prerequisitos, id);
+    }
+
+    await nodo.save();
+
+    res.json({ mensaje: `Nodo "${nodo.concepto}" actualizado correctamente`, nodo });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { listarNodos, marcarDominado, crearNodo, editarNodo };

@@ -119,6 +119,8 @@ export const api = {
   
   crearNodo: (payload) => apiFetch('/nodos', { method: 'POST', body: payload }),
 
+ editarNodo: (id, payload) => apiFetch(`/nodos/${id}`, { method: 'PATCH', body: payload }),
+
   obtenerConversacion: (nodoId) => apiFetch(`/tutor/${nodoId}/conversacion`),
 
 
